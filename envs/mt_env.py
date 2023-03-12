@@ -118,13 +118,14 @@ class MtEnv(gym.Env):
         self.simulator.tick(dt)
 
         step_reward = self._calculate_reward()
+        if(step_reward == -1):
+            self.done = True
 
         info = self._create_info(
             orders=orders_info, closed_orders=closed_orders_info, step_reward=step_reward
         )
         observation = self._get_observation()
         self.history.append(info)
-
         return observation, step_reward, self._done, info
 
 
@@ -256,7 +257,10 @@ class MtEnv(gym.Env):
     def _calculate_reward(self) -> float:
         prev_equity = self.history[-1]['equity']
         current_equity = self.simulator.equity
-        step_reward = current_equity - prev_equity
+        if(current_equity <= 0):
+            step_reward = - 1
+        else:
+            step_reward = (current_equity - prev_equity) / prev_equity
         return step_reward
 
 

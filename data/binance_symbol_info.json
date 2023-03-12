@@ -1,0 +1,25 @@
+[  {    
+    "name": "BTCUSDT",
+    "market": "Binance",
+    "currency_margin": "BTC",
+    "currency_profit": "USDT",
+    "currencies": ["USDT", "BTC"],
+    "trade_contract_size": 1.0,
+    "margin_rate": 1.0,
+    "volume_min": 0.01,
+    "volume_max": 100000.0,
+    "volume_step": 0.01
+  },
+  {
+    "name": "ETHUSDT",
+    "market": "Binance",
+    "currency_margin": "ETH",
+    "currency_profit": "USDT",
+    "currencies": ["USDT", "ETH"],
+    "trade_contract_size": 1.0,
+    "margin_rate": 1.0,
+    "volume_min": 0.1,
+    "volume_max": 100000.0,
+    "volume_step": 0.01
+  }
+]

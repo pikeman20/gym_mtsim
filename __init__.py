@@ -1,7 +1,7 @@
 from gym.envs.registration import register
 
 from .metatrader import Timeframe, SymbolInfo
-from .simulator import MtSimulator, BinanceSimulator, OrderType, Order, SymbolNotFound, OrderNotFound
+from .simulator import BinanceSimulator, OrderType, Order, SymbolNotFound, OrderNotFound
 from .envs import MtEnv
 from .data import FOREX_DATA_PATH, STOCKS_DATA_PATH, CRYPTO_DATA_PATH, MIXED_DATA_PATH, BINANCE_DATA_PATH
 
@@ -10,7 +10,7 @@ register(
     id='forex-hedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=FOREX_DATA_PATH, hedge=True),
+        'original_simulator': BinanceSimulator(symbols_filename=FOREX_DATA_PATH, hedge=True),
         'trading_symbols': ['EURUSD', 'GBPCAD', 'USDJPY'],
         'window_size': 10,
         'symbol_max_orders': 2,
@@ -22,7 +22,7 @@ register(
     id='forex-unhedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=FOREX_DATA_PATH, hedge=False),
+        'original_simulator': BinanceSimulator(symbols_filename=FOREX_DATA_PATH, hedge=False),
         'trading_symbols': ['EURUSD', 'GBPCAD', 'USDJPY'],
         'window_size': 10,
         'fee': lambda symbol: 0.03 if 'JPY' in symbol else 0.0003
@@ -33,7 +33,7 @@ register(
     id='stocks-hedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=STOCKS_DATA_PATH, hedge=True),
+        'original_simulator': BinanceSimulator(symbols_filename=STOCKS_DATA_PATH, hedge=True),
         'trading_symbols': ['GOGL', 'AAPL', 'TSLA', 'MSFT'],
         'window_size': 10,
         'symbol_max_orders': 2,
@@ -45,7 +45,7 @@ register(
     id='stocks-unhedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=STOCKS_DATA_PATH, hedge=False),
+        'original_simulator': BinanceSimulator(symbols_filename=STOCKS_DATA_PATH, hedge=False),
         'trading_symbols': ['GOGL', 'AAPL', 'TSLA', 'MSFT'],
         'window_size': 10,
         'fee': 0.2
@@ -56,7 +56,7 @@ register(
     id='crypto-hedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=CRYPTO_DATA_PATH, hedge=True),
+        'original_simulator': BinanceSimulator(symbols_filename=CRYPTO_DATA_PATH, hedge=True),
         'trading_symbols': ['BTCUSD', 'ETHUSD', 'BCHUSD'],
         'window_size': 10,
         'symbol_max_orders': 2,
@@ -72,7 +72,7 @@ register(
     id='crypto-unhedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=CRYPTO_DATA_PATH, hedge=False),
+        'original_simulator': BinanceSimulator(symbols_filename=CRYPTO_DATA_PATH, hedge=False),
         'trading_symbols': ['BTCUSD', 'ETHUSD', 'BCHUSD'],
         'window_size': 10,
         'fee': lambda symbol: {
@@ -87,7 +87,7 @@ register(
     id='mixed-hedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=MIXED_DATA_PATH, hedge=True),
+        'original_simulator': BinanceSimulator(symbols_filename=MIXED_DATA_PATH, hedge=True),
         'trading_symbols': ['EURUSD', 'USDCAD', 'GOGL', 'AAPL', 'BTCUSD', 'ETHUSD'],
         'window_size': 10,
         'symbol_max_orders': 2,
@@ -106,7 +106,7 @@ register(
     id='mixed-unhedge-v0',
     entry_point='gym_mtsim.envs:MtEnv',
     kwargs={
-        'original_simulator': MtSimulator(symbols_filename=MIXED_DATA_PATH, hedge=False),
+        'original_simulator': BinanceSimulator(symbols_filename=MIXED_DATA_PATH, hedge=False),
         'trading_symbols': ['EURUSD', 'USDCAD', 'GOGL', 'AAPL', 'BTCUSD', 'ETHUSD'],
         'window_size': 10,
         'fee': lambda symbol: {

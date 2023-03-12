@@ -3,45 +3,55 @@ from datetime import datetime
 
 import numpy as np
 
-import MetaTrader5 as mt5
-from MetaTrader5 import SymbolInfo as MtSymbolInfo
+from typing import Tuple
 
+class MtSymbolInfo:
+    name: str
+    market: str
+    currency_margin: str
+    currency_profit: str
+    currencies: Tuple[str, ...]
+    trade_contract_size: float
+    margin_rate: float
+    volume_min: float
+    volume_max: float
+    volume_step: float
 
 class Timeframe(Enum):
-    M1 = mt5.TIMEFRAME_M1
-    M2 = mt5.TIMEFRAME_M2
-    M3 = mt5.TIMEFRAME_M3
-    M4 = mt5.TIMEFRAME_M4
-    M5 = mt5.TIMEFRAME_M5
-    M6 = mt5.TIMEFRAME_M6
-    M10 = mt5.TIMEFRAME_M10
-    M12 = mt5.TIMEFRAME_M12
-    M15 = mt5.TIMEFRAME_M15
-    M20 = mt5.TIMEFRAME_M20
-    M30 = mt5.TIMEFRAME_M30
-    H1 = mt5.TIMEFRAME_H1
-    H2 = mt5.TIMEFRAME_H2
-    H4 = mt5.TIMEFRAME_H4
-    H3 = mt5.TIMEFRAME_H3
-    H6 = mt5.TIMEFRAME_H6
-    H8 = mt5.TIMEFRAME_H8
-    H12 = mt5.TIMEFRAME_H12
-    D1 = mt5.TIMEFRAME_D1
-    W1 = mt5.TIMEFRAME_W1
-    MN1 = mt5.TIMEFRAME_MN1
+    M1                        = 1
+    M2                        = 2
+    M3                        = 3
+    M4                        = 4
+    M5                        = 5
+    M6                        = 6
+    M10                       = 10
+    M12                       = 12
+    M15                       = 15
+    M20                       = 20
+    M30                       = 30
+    H1                        = 1  | 0x4000
+    H2                        = 2  | 0x4000
+    H4                        = 4  | 0x4000
+    H3                        = 3  | 0x4000
+    H6                        = 6  | 0x4000
+    H8                        = 8  | 0x4000
+    H12                       = 12 | 0x4000
+    D1                        = 24 | 0x4000
+    W1                        = 1  | 0x8000
+    MN1                       = 1  | 0xC000
 
 
 def initialize() -> bool:
-    return mt5.initialize()
+    return False
 
 
 def shutdown() -> None:
-    mt5.shutdown()
+    return None
 
 
 def copy_rates_range(symbol: str, timeframe: Timeframe, date_from: datetime, date_to: datetime) -> np.ndarray:
-    return mt5.copy_rates_range(symbol, timeframe.value, date_from, date_to)
+    return None
 
 
 def symbol_info(symbol: str) -> MtSymbolInfo:
-    return mt5.symbol_info(symbol)
+    return None

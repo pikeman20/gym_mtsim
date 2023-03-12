@@ -16,7 +16,7 @@ import gym
 from gym import spaces
 from gym.utils import seeding
 
-from ..simulator import MtSimulator, BinanceSimulator, OrderType
+from ..simulator import BinanceSimulator, OrderType
 
 
 class MtEnv(gym.Env):
@@ -24,7 +24,7 @@ class MtEnv(gym.Env):
     metadata = {'render.modes': ['human', 'simple_figure', 'advanced_figure']}
 
     def __init__(
-            self, original_simulator: MtSimulator, trading_symbols: List[str],
+            self, original_simulator: BinanceSimulator, trading_symbols: List[str],
             window_size: int, time_points: Optional[List[datetime]]=None,
             hold_threshold: float=0.5, close_threshold: float=0.5,
             fee: Union[float, Callable[[str], float]]=0.0005,
@@ -89,7 +89,7 @@ class MtEnv(gym.Env):
         self._end_tick = len(self.time_points) - 1
         self._done: bool = NotImplemented
         self._current_tick: int = NotImplemented
-        self.simulator: MtSimulator = NotImplemented
+        self.simulator: BinanceSimulator = NotImplemented
         self.history: List[Dict[str, Any]] = NotImplemented
 
 

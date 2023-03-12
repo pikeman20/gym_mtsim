@@ -107,7 +107,11 @@ class BinanceSimulator:
         if not os.path.exists(filename):
             return False
         with open(filename, 'rb') as file:
-            self.symbols_info, self.symbols_data, self.symbols_data_normalized = pickle.load(file)
+            data = pickle.load(file)
+            self.symbols_info = data[0]
+            self.symbols_data = data[1]
+            if(len(data) > 2):
+                self.symbols_data_normalized = data[2]
         return True
 
 

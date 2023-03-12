@@ -2,7 +2,6 @@ from typing import Tuple
 from dataclasses import dataclass
 import json
 
-from .interface import MtSymbolInfo
 
 @dataclass
 class SymbolInfo:
@@ -16,21 +15,6 @@ class SymbolInfo:
     volume_min: float
     volume_max: float
     volume_step: float
-    
-    def __init__(self, info: MtSymbolInfo) -> None:
-        self.name: str = info.name
-        self.market: str = self._get_market(info)
-
-        self.currency_margin: str = info.currency_margin
-        self.currency_profit: str = info.currency_profit
-        self.currencies: Tuple[str, ...] = tuple(set([self.currency_margin, self.currency_profit]))
-
-        self.trade_contract_size: float = info.trade_contract_size
-        self.margin_rate: float = 1.0  # MetaTrader info does not contain this value!
-
-        self.volume_min: float = info.volume_min
-        self.volume_max: float = info.volume_max
-        self.volume_step: float = info.volume_step
 
     def __init__(self, name, market, currency_margin, currency_profit, currencies, trade_contract_size,
                  margin_rate, volume_min, volume_max, volume_step):
@@ -54,7 +38,7 @@ class SymbolInfo:
         return f'{self.market}/{self.name}'
 
 
-    def _get_market(self, info: MtSymbolInfo) -> str:
+    def _get_market(self, info: Tuple[str, ...]) -> str:
         mapping = {
             'forex': 'Forex',
             'crypto': 'Crypto',

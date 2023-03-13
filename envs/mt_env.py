@@ -61,7 +61,7 @@ class MtEnv(gym.Env):
         self.fee = fee
         self.symbol_max_orders = symbol_max_orders
         self.multiprocessing_pool = Pool(multiprocessing_processes) if multiprocessing_processes else None
-
+        self._is_dead = 0
         self.prices = self._get_prices()
         self.signal_features = self._process_data()
 
@@ -69,19 +69,22 @@ class MtEnv(gym.Env):
 
         # spaces
         self.action_space = spaces.Box(
-            low=-1e10, high=1e10, dtype=np.float64,
+            low=-1e10, high=1e10, dtype=np.float32,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
         self.observation_space = spaces.Dict({
-            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float64),
+            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
-                low=-np.inf, high=np.inf, dtype=np.float64,
+                low=-np.inf, high=np.inf, dtype=np.float32,
                 shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
-            )  # symbol, order_i -> [entry_price, volume, profit]
+            ),  # symbol, order_i -> [entry_price, volume, profit]
+            'is_dead': spaces.Discrete(2) # 0 = not dead, 1 = dead
+
+            
         })
 
         # episode
@@ -100,6 +103,7 @@ class MtEnv(gym.Env):
 
     def reset(self) -> Dict[str, np.ndarray]:
         self._done = False
+        self._is_dead = 0
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
@@ -118,14 +122,14 @@ class MtEnv(gym.Env):
         self.simulator.tick(dt)
 
         step_reward = self._calculate_reward()
-        if(step_reward == -1):
-            self.done = True
 
         info = self._create_info(
             orders=orders_info, closed_orders=closed_orders_info, step_reward=step_reward
         )
         observation = self._get_observation()
         self.history.append(info)
+        if(self._is_dead):
+            self._done = True
         return observation, step_reward, self._done, info
 
 
@@ -250,17 +254,24 @@ class MtEnv(gym.Env):
             'margin': np.array([self.simulator.margin]),
             'features': features,
             'orders': orders,
+            'is_dead': self._is_dead,
         }
         return observation
 
 
     def _calculate_reward(self) -> float:
+        
         prev_equity = self.history[-1]['equity']
         current_equity = self.simulator.equity
         if(current_equity <= 0):
-            step_reward = - 1
+            step_reward = - 100
+            self._is_dead = 1
         else:
-            step_reward = (current_equity - prev_equity) / prev_equity
+            equity_change = (current_equity - prev_equity) / prev_equity
+            step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
+            trade_penalty = -0.1 * len(self.simulator.orders)
+            step_reward += trade_penalty
+
         return step_reward
 
 

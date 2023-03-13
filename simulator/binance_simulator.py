@@ -311,7 +311,7 @@ class BinanceSimulator:
             return 1.
 
         if self.unit == symbol_info.currency_margin:
-            return 1 / self.price_at(symbol, time)['close']
+            return 1 / self.price_at(symbol, time)['Close']
 
         currency = symbol_info.currency_profit
         unit_symbol_info = self._get_unit_symbol_info(currency)

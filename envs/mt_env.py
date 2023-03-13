@@ -77,12 +77,12 @@ class MtEnv(gym.Env):
             'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'is_dead': spaces.Discrete(2), # 0 = not dead, 1 = dead
             'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
                 low=-np.inf, high=np.inf, dtype=np.float32,
                 shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
             ),  # symbol, order_i -> [entry_price, volume, profit]
-            'is_dead': spaces.Discrete(2) # 0 = not dead, 1 = dead
 
             
         })
@@ -252,9 +252,9 @@ class MtEnv(gym.Env):
             'balance': np.array([self.simulator.balance]),
             'equity': np.array([self.simulator.equity]),
             'margin': np.array([self.simulator.margin]),
+            'is_dead': self._is_dead,
             'features': features,
             'orders': orders,
-            'is_dead': self._is_dead,
         }
         return observation
 

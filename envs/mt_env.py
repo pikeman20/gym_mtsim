@@ -264,12 +264,12 @@ class MtEnv(gym.Env):
         prev_equity = self.history[-1]['equity']
         current_equity = self.simulator.equity
         if(current_equity <= 0):
-            step_reward = - 100
+            step_reward = - 10
             self._is_dead = 1
         else:
             equity_change = (current_equity - prev_equity) / prev_equity
             step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
-            trade_penalty = -0.1 * len(self.simulator.orders)
+            trade_penalty = -0.01 * len(self.simulator.orders)
             step_reward += trade_penalty
 
         return step_reward

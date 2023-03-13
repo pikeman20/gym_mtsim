@@ -126,7 +126,7 @@ register(
     kwargs={
         'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_PATH, hedge=True),
         'trading_symbols': ['BTCUSDT'],
-        'window_size': 100,
+        'window_size': 50,
         'symbol_max_orders': 2,
         'fee': lambda symbol: {
             'BTCUSDT': 0.04,
@@ -140,7 +140,7 @@ register(
     kwargs={
         'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_PATH, hedge=False),
         'trading_symbols': ['BTCUSDT'],
-        'window_size': 100,
+        'window_size': 50,
         'fee': lambda symbol: {
             'BTCUSDT': 0.04,
         }[symbol]

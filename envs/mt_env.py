@@ -269,8 +269,6 @@ class MtEnv(gym.Env):
         else:
             equity_change = (current_equity - prev_equity) / prev_equity
             step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
-            trade_penalty = -0.01 * len(self.simulator.orders)
-            step_reward += trade_penalty
 
         return step_reward
 

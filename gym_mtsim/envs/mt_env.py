@@ -64,8 +64,8 @@ class MtEnv(gym.Env):
         self._is_dead = 0
         self.prices = self._get_prices()
         self.signal_features = self._process_data()
-
         self.features_shape = (window_size, self.signal_features.shape[1])
+        self.initBalance = original_simulator.balance
 
         # spaces
         self.action_space = spaces.Box(
@@ -83,8 +83,6 @@ class MtEnv(gym.Env):
                 low=-np.inf, high=np.inf, dtype=np.float32,
                 shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
             ),  # symbol, order_i -> [entry_price, volume, profit]
-
-            
         })
 
         # episode
@@ -102,6 +100,11 @@ class MtEnv(gym.Env):
 
 
     def reset(self) -> Dict[str, np.ndarray]:
+        if(self.history != NotImplemented and len(self.history) > 0):
+            fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
+            timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            fig.write_image(f"img_log/log_{self.simulator.balance}_{timestamp_str}.png")
+
         self._done = False
         self._is_dead = 0
         self._current_tick = self._start_tick
@@ -144,6 +147,8 @@ class MtEnv(gym.Env):
             close_orders_logit = symbol_action[:-2]
             hold_logit = symbol_action[-2]
             volume = symbol_action[-1]
+            currentClose = self.simulator.price_at(symbol, self.time_points[self._current_tick])['Close']
+            volume = expit(volume) * self.simulator.equity / currentClose
 
             close_orders_probability = expit(close_orders_logit)
             hold_probability = expit(hold_logit)
@@ -260,16 +265,34 @@ class MtEnv(gym.Env):
 
 
     def _calculate_reward(self) -> float:
-        
         prev_equity = self.history[-1]['equity']
         current_equity = self.simulator.equity
         if(current_equity <= 0):
-            step_reward = - 10
+            step_reward = - 100
             self._is_dead = 1
         else:
             equity_change = (current_equity - prev_equity) / prev_equity
-            step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
+            if self.simulator.free_margin < self.simulator.balance * 0.1:
+                # Penalty for not opening orders when available balance is low
+                step_reward = -0.1
+            else:
+                # Bonus for opening orders despite limited funds
+                balance_ratio = self.simulator.free_margin / self.simulator.balance
+                order_bonus = balance_ratio * 0.05
+                step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
+                step_reward += order_bonus
+            
+            
+            total_profit = 0.0
+            for order in self.simulator.closed_orders:
+                if order.closed:
+                    profit = order.profit
+                    total_profit += profit
 
+            total_profit = (total_profit - self.initBalance) / self.initBalance
+            realized_profit_reward = 2.0 / (1.0 + np.exp(-10 * total_profit)) - 1.0
+
+            step_reward += realized_profit_reward
         return step_reward
 
 

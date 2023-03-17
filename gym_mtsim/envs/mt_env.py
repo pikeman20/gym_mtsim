@@ -7,6 +7,7 @@ from pathos.multiprocessing import ProcessingPool as Pool
 import numpy as np
 from scipy.special import expit
 
+import random
 import matplotlib.pyplot as plt
 import matplotlib.cm as plt_cm
 import matplotlib.colors as plt_colors
@@ -15,9 +16,7 @@ import torch
 import gym
 from gym import spaces
 from gym.utils import seeding
-
 from ..simulator import BinanceSimulator, OrderType
-
 
 class MtEnv(gym.Env):
 
@@ -27,8 +26,8 @@ class MtEnv(gym.Env):
             self, original_simulator: BinanceSimulator, trading_symbols: List[str],
             window_size: int, time_points: Optional[List[datetime]]=None,
             hold_threshold: float=0.5, close_threshold: float=0.5,
-            fee: Union[float, Callable[[str], float]]=0.0005,
-            symbol_max_orders: int=1, multiprocessing_processes: Optional[int]=None
+            fee: Union[float, Callable[[str], float]]=0.0005, env_size: int = 3000,
+            symbol_max_orders: int=1, multiprocessing_processes: Optional[int]=None, saveImgInReset: bool=False
         ) -> None:
 
         # validations
@@ -54,6 +53,7 @@ class MtEnv(gym.Env):
         self.seed()
         self.original_simulator = original_simulator
         self.trading_symbols = trading_symbols
+        self.env_size = env_size
         self.window_size = window_size
         self.time_points = time_points
         self.hold_threshold = hold_threshold
@@ -66,7 +66,7 @@ class MtEnv(gym.Env):
         self.signal_features = self._process_data()
         self.features_shape = (window_size, self.signal_features.shape[1])
         self.initBalance = original_simulator.balance
-
+        self.saveImgInReset = saveImgInReset
         # spaces
         self.action_space = spaces.Box(
             low=-1e10, high=1e10, dtype=np.float32,
@@ -86,8 +86,8 @@ class MtEnv(gym.Env):
         })
 
         # episode
-        self._start_tick = self.window_size - 1
-        self._end_tick = len(self.time_points) - 1
+        self._start_tick, self._end_tick = self.getEnvironmentRange()
+
         self._done: bool = NotImplemented
         self._current_tick: int = NotImplemented
         self.simulator: BinanceSimulator = NotImplemented
@@ -98,15 +98,24 @@ class MtEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
+    def getEnvironmentRange(self):
+        start_tick = self.window_size - 1
+        end_tick = len(self.time_points) - 1
+
+        start_tick = random.randint(start_tick, end_tick - self.env_size)
+        end_tick = start_tick + self.env_size
+        
+        return start_tick, end_tick
 
     def reset(self) -> Dict[str, np.ndarray]:
-        if(self.history != NotImplemented and len(self.history) > 0):
+        if(self.saveImgInReset and self.history != NotImplemented and len(self.history) > 0):
             fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
             timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             fig.write_image(f"img_log/log_{self.simulator.balance}_{timestamp_str}.png")
 
         self._done = False
         self._is_dead = 0
+        self._start_tick, self._end_tick = self.getEnvironmentRange()
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
@@ -334,9 +343,11 @@ class MtEnv(gym.Env):
 
         for j, symbol in enumerate(self.trading_symbols):
             close_price = self.prices[symbol][:, 0]
+            draw_price = self.prices[symbol][:, 0][self._start_tick:self._end_tick]
+            draw_points = self.time_points[self._start_tick:self._end_tick]
             symbol_color = symbol_colors[j]
 
-            ax.plot(self.time_points, close_price, c=symbol_color, marker='.', label=symbol)
+            ax.plot(draw_points, draw_price, c=symbol_color, marker='.', label=symbol)
 
             buy_ticks = []
             buy_error_ticks = []
@@ -415,12 +426,14 @@ class MtEnv(gym.Env):
 
         for j, symbol in enumerate(self.trading_symbols):
             close_price = self.prices[symbol][:, 0]
+            draw_price = self.prices[symbol][:, 0][self._start_tick:self._end_tick]
+            draw_points = self.time_points[self._start_tick:self._end_tick]
             symbol_color = symbol_colors[j]
 
             fig.add_trace(
                 go.Scatter(
-                    x=self.time_points,
-                    y=close_price,
+                    x=draw_points,
+                    y=draw_price,
                     mode='lines+markers',
                     line_color=get_color_string(symbol_color),
                     opacity=1.0,

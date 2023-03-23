@@ -1,7 +1,8 @@
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable
 
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta
+from plotly.graph_objects import Figure
 from pathos.multiprocessing import ProcessingPool as Pool
 
 import numpy as np
@@ -12,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as plt_cm
 import matplotlib.colors as plt_colors
 import plotly.graph_objects as go
-import torch
+import os
 import gym
 from gym import spaces
 from gym.utils import seeding
@@ -26,7 +27,7 @@ class MtEnv(gym.Env):
             self, original_simulator: BinanceSimulator, trading_symbols: List[str],
             window_size: int, time_points: Optional[List[datetime]]=None,
             hold_threshold: float=0.5, close_threshold: float=0.5,
-            fee: Union[float, Callable[[str], float]]=0.0005, env_size: int = 3000,
+            fee: Union[float, Callable[[str], float]]=0.0005, env_size: int = 200,
             symbol_max_orders: int=1, multiprocessing_processes: Optional[int]=None, saveImgInReset: bool=False
         ) -> None:
 
@@ -69,7 +70,7 @@ class MtEnv(gym.Env):
         self.saveImgInReset = saveImgInReset
         # spaces
         self.action_space = spaces.Box(
-            low=-1e10, high=1e10, dtype=np.float32,
+            low=-1e9, high=1e9, dtype=np.float32,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
@@ -81,8 +82,8 @@ class MtEnv(gym.Env):
             'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
                 low=-np.inf, high=np.inf, dtype=np.float32,
-                shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
-            ),  # symbol, order_i -> [entry_price, volume, profit]
+                shape=(len(self.trading_symbols), self.symbol_max_orders, 4)
+            ),  # symbol, order_i -> [entry_price, volume, profit, orders_added_count]
         })
 
         # episode
@@ -108,40 +109,47 @@ class MtEnv(gym.Env):
         return start_tick, end_tick
 
     def reset(self) -> Dict[str, np.ndarray]:
-        if(self.saveImgInReset and self.history != NotImplemented and len(self.history) > 0):
-            fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
-            timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            fig.write_image(f"img_log/log_{self.simulator.balance}_{timestamp_str}.png")
-
+        try:
+            if(self.saveImgInReset and os.path.exists("img_log") and self.history != NotImplemented and len(self.history) > 0):
+                fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
+                timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                fig.write_image(f"img_log/log_{self.simulator.balance}_{timestamp_str}.png")
+                fig.write_html(f"img_log/log_{self.simulator.balance}_{timestamp_str}.html")
+        except:
+            print('Exception at reset write log')
         self._done = False
         self._is_dead = 0
         self._start_tick, self._end_tick = self.getEnvironmentRange()
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
-        self.history = [self._create_info()]
+        self.history = [self._create_info(step_reward = 0, reward_description = "")]
         return self._get_observation()
 
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
+        action = self._normalize_action(action)
+        print(action)
         orders_info, closed_orders_info = self._apply_action(action)
 
         self._current_tick += 1
-        if self._current_tick == self._end_tick:
+        if self._current_tick == self._end_tick:                
             self._done = True
 
         dt = self.time_points[self._current_tick] - self.time_points[self._current_tick - 1]
         self.simulator.tick(dt)
 
-        step_reward = self._calculate_reward()
+        step_reward, reward_description = self._calculate_reward()
 
         info = self._create_info(
-            orders=orders_info, closed_orders=closed_orders_info, step_reward=step_reward
+            orders=orders_info, closed_orders=closed_orders_info, step_reward=step_reward,
+            reward_description = reward_description
         )
         observation = self._get_observation()
         self.history.append(info)
         if(self._is_dead):
             self._done = True
+
         return observation, step_reward, self._done, info
 
 
@@ -157,10 +165,10 @@ class MtEnv(gym.Env):
             hold_logit = symbol_action[-2]
             volume = symbol_action[-1]
             currentClose = self.simulator.price_at(symbol, self.time_points[self._current_tick])['Close']
-            volume = expit(volume) * self.simulator.equity / currentClose
-
-            close_orders_probability = expit(close_orders_logit)
-            hold_probability = expit(hold_logit)
+            volume = volume * self.simulator.equity / currentClose
+            
+            close_orders_probability = abs(close_orders_logit)
+            hold_probability = abs(hold_logit)
             hold = bool(hold_probability > self.hold_threshold)
             modified_volume = self._get_modified_volume(symbol, volume)
 
@@ -213,14 +221,7 @@ class MtEnv(gym.Env):
         prices = {}
 
         for symbol in self.trading_symbols:
-            get_price_at = lambda time: \
-                self.original_simulator.price_at(symbol, time)[keys]
-
-            if self.multiprocessing_pool is None:
-                p = list(map(get_price_at, self.time_points))
-            else:
-                p = self.multiprocessing_pool.map(get_price_at, self.time_points)
-
+            p = self.original_simulator.prices_at(symbol, self.time_points)[keys]
             prices[symbol] = np.array(p)
 
         return prices
@@ -235,15 +236,9 @@ class MtEnv(gym.Env):
                 keys = self.original_simulator.symbols_data_normalized[symbol].columns.tolist()
                 remove = ['Time', 'normalizesma']
                 keys = list(filter(lambda x: x not in remove, keys))
-                get_price_at = lambda time: \
-                    self.original_simulator.feature_at(symbol, time)[keys]
-
-                if self.multiprocessing_pool is None:
-                    p = list(map(get_price_at, self.time_points))
-                else:
-                    p = self.multiprocessing_pool.map(get_price_at, self.time_points)
-
+                p = self.original_simulator.features_at(symbol, self.time_points)[keys]
                 features[symbol] = np.array(p)
+
             data = features
         return data
     
@@ -260,7 +255,7 @@ class MtEnv(gym.Env):
         for i, symbol in enumerate(self.trading_symbols):
             symbol_orders = self.simulator.symbol_orders(symbol)
             for j, order in enumerate(symbol_orders):
-                orders[i, j] = [order.entry_price, order.volume, order.profit]
+                orders[i, j] = [order.entry_price, order.volume, order.profit, order.order_added_count]
 
         observation = {
             'balance': np.array([self.simulator.balance]),
@@ -276,34 +271,88 @@ class MtEnv(gym.Env):
     def _calculate_reward(self) -> float:
         prev_equity = self.history[-1]['equity']
         current_equity = self.simulator.equity
-        if(current_equity <= 0):
-            step_reward = - 100
+        step_reward = 0
+        reward_description = ''
+        # Check if the agent has run out of money
+        if current_equity <= 0:
+            step_reward = -100
             self._is_dead = 1
         else:
-            equity_change = (current_equity - prev_equity) / prev_equity
-            if self.simulator.free_margin < self.simulator.balance * 0.1:
-                # Penalty for not opening orders when available balance is low
-                step_reward = -0.1
-            else:
-                # Bonus for opening orders despite limited funds
-                balance_ratio = self.simulator.free_margin / self.simulator.balance
-                order_bonus = balance_ratio * 0.05
-                step_reward = 2.0 / (1.0 + np.exp(-10 * equity_change)) - 1.0
-                step_reward += order_bonus
+            # Bonus for opening a new order
+            bonus_for_open_order = 0.
+            if len(self.simulator.orders) == 0:
+                bonus_for_open_order = random.uniform(-0.2, 0)
+
+            step_reward += bonus_for_open_order
+            reward_description += f"Bonus (+): {bonus_for_open_order}<br> "
+            # Penalty for holding orders for too long
+            penalty_for_holding_order = 0
+            for order in self.simulator.orders:
+                penalty_for_holding_order += self._bar_between_interval(order.entry_time, self.simulator.current_time)
             
-            
+            step_reward -= penalty_for_holding_order * 0.01
+            reward_description += f"Penalty hold (-): {penalty_for_holding_order * 0.1}<br> "
+
+            # 
+            for order in self.simulator.orders:
+                if(order.profit >= order.take_profit_at):
+                    tp_reach_bonus = self._calculate_ratio(order.take_profit_at, order.profit)
+                    step_reward += tp_reach_bonus
+                    reward_description += f"Tp reached bonus (+): {tp_reach_bonus}<br> "
+                elif(order.profit <= order.stop_loss_at):
+                    sl_reach_bonus = self._calculate_ratio(abs(order.stop_loss_at), abs(order.profit))
+                    step_reward += sl_reach_bonus
+                    reward_description += f"SL reached bonus (+): {sl_reach_bonus}<br> "
+                #Add penalty when it's add more volumes to order in multiple times           
+                step_reward -= order.order_added_count * 0.01
+                reward_description += f"Penalty added (-): {order.order_added_count * 0.001}<br> "
+
             total_profit = 0.0
+            # Calculate the profit from closed orders
             for order in self.simulator.closed_orders:
-                if order.closed:
-                    profit = order.profit
-                    total_profit += profit
+                if order.exit_time == self.simulator.current_time:
+                    # Calculate the profit as a ratio of the entry balance
+                    profit = self._calculate_ratio(order.entry_balance + order.profit, order.entry_balance)
+                    is_loss = 1 if profit < 0 else 0
+                    profit *= (1 - 0.2 * is_loss) 
 
-            total_profit = (total_profit - self.initBalance) / self.initBalance
-            realized_profit_reward = 2.0 / (1.0 + np.exp(-10 * total_profit)) - 1.0
+                    # Calculate the dragdown as a ratio of the entry balance
+                    dragdown = self._calculate_ratio(order.entry_balance + order.dragdown, order.entry_balance)
+                    
+                    # Add a penalty if the agent closed the order at the maximum dragdown
+                    if order.profit < 0 and order.profit == order.dragdown:
+                        dragdown += dragdown * 0.1
 
-            step_reward += realized_profit_reward
-        return step_reward
+                    reward_description += f"Closed profit (+): {profit}<br> "
+                    reward_description += f"Closed dragdown (+): {dragdown}<br> "
+                    total_profit += profit + dragdown
+                    
+                    if(order.highestprofit > 0):
+                        profit = order.profit / order.highestprofit
+                        if profit > 0.5:
+                            total_profit += 0.1 * profit
+                            reward_description += f"Closed profit (highest) (+): {0.1 * profit}<br> "
 
+                        dragdown = order.dragdown / order.highestprofit
+                        if dragdown < -0.5:
+                            total_profit -= 0.1 * abs(dragdown)
+                            reward_description += f"Closed dragdown (highest) (-): { 0.1 * abs(dragdown)}<br> "
+
+            # Add the profit and equity change to the step reward
+            step_reward += total_profit
+            equity_change = self._calculate_ratio(current_equity, prev_equity)
+            step_reward += equity_change * 0.5
+            reward_description += f"Equity change (+): {equity_change * 0.5}<br> "
+            # Add a reward for maintaining a high rate of return
+            rate_of_return = self._calculate_ratio(current_equity, self.simulator.balance)
+            step_reward += 0.1 * rate_of_return
+            reward_description += f"Rate of return (+): {0.1 * rate_of_return}<br> "
+            # # Add a penalty for overleveraging
+            # balance_margin_ratio = self.simulator.balance / self.simulator.margin
+            # if balance_margin_ratio > 2:
+            #     step_reward -= 0.1
+
+        return step_reward, reward_description
 
 
     def _create_info(self, **kwargs: Any) -> Dict[str, Any]:
@@ -324,7 +373,7 @@ class MtEnv(gym.Env):
         return v
 
 
-    def render(self, mode: str='human', **kwargs: Any) -> Any:
+    def render(self, mode: str='human', **kwargs: Any) -> Figure:
         if mode == 'simple_figure':
             return self._render_simple_figure(**kwargs)
         if mode == 'advanced_figure':
@@ -334,7 +383,7 @@ class MtEnv(gym.Env):
 
     def _render_simple_figure(
         self, figsize: Tuple[float, float]=(14, 6), return_figure: bool=False
-    ) -> Any:
+    ) -> Figure:
         fig, ax = plt.subplots(figsize=figsize, facecolor='white')
 
         cmap_colors = np.array(plt_cm.tab10.colors)[[0, 1, 4, 5, 6, 8]]
@@ -419,10 +468,11 @@ class MtEnv(gym.Env):
             f"equity: {h['equity']:.6f}<br>"
             f"margin: {h['margin']:.6f}<br>"
             f"free margin: {h['free_margin']:.6f}<br>"
-            f"margin level: {h['margin_level']:.6f}"
+            f"margin level: {h['margin_level']:.6f}<br>"
+            f"reward: {h['step_reward']:.6f}<br>"
+            f"reward_desc: {h['reward_description']}"
             for h in self.history
         ]
-        extra_info = [extra_info[0]] * (self.window_size - 1) + extra_info
 
         for j, symbol in enumerate(self.trading_symbols):
             close_price = self.prices[symbol][:, 0]
@@ -551,8 +601,14 @@ class MtEnv(gym.Env):
             f"Equity: {self.simulator.equity:.6f} ~ "
             f"Margin: {self.simulator.margin:.6f} ~ "
             f"Free Margin: {self.simulator.free_margin:.6f} ~ "
-            f"Margin Level: {self.simulator.margin_level:.6f}"
+            f"Margin Level: {self.simulator.margin_level:.6f} ~ "
         )
+        for j, symbol in enumerate(self.trading_symbols):
+            total_reward = sum(
+                [ h['step_reward']  for h in self.history ]
+                )
+            title += f"<br>Reward {symbol}: {total_reward:.6f}"
+            
         fig.update_layout(
             title=title,
             xaxis_tickformat=time_format,
@@ -568,3 +624,19 @@ class MtEnv(gym.Env):
 
     def close(self) -> None:
         plt.close()
+
+    def _bar_between_interval(self, start_datetime : datetime, end_datetime : datetime, interval = timedelta(days=1)):
+        time_diff = end_datetime - start_datetime
+        interval_diff = time_diff // interval
+        return interval_diff
+    
+    def _calculate_ratio(self, current_value, prev_value):
+        ratio = (current_value - prev_value) / prev_value
+        return ratio
+    
+    def _normalize_action(self, action):
+        formatted_str = np.array2string(action, formatter={'float_kind':
+        lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '')})
+        formatted_str = formatted_str.replace('[', '').replace(']', '').replace('\n', '')
+        formatted_array = np.fromiter(formatted_str.split(), dtype=np.float32)
+        return formatted_array

@@ -19,7 +19,8 @@ class BinanceSimulator:
 
     def __init__(
             self, unit: str='USDT', balance: float=10000., leverage: float=20.,
-            stop_out_level: float=0.2, hedge: bool=True, symbols_filename: Optional[str]=None, symbols_info_filename: str = BINANCE_SYMBOL_PATH, csvDataFolder: str = ''
+            stop_out_level: float=0.2, hedge: bool=True, symbols_filename: Optional[str]=None, symbols_info_filename: str = BINANCE_SYMBOL_PATH
+            , csvDataFolder: str = '', risk_ratio: float = 0.2
         ) -> None:
         self.symbols_info_filename = symbols_info_filename
         self.csvDataFolder = csvDataFolder if csvDataFolder else BINANCE_SYMBOL_CSV_PATH
@@ -37,7 +38,7 @@ class BinanceSimulator:
         self.orders: List[Order] = []
         self.closed_orders: List[Order] = []
         self.current_time: datetime = NotImplemented
-
+        self.risk_ratio = risk_ratio
         if symbols_filename:
             if not self.load_symbols(symbols_filename):
                 raise FileNotFoundError(f"file '{symbols_filename}' not found")
@@ -126,6 +127,7 @@ class BinanceSimulator:
             order.exit_price = self.price_at(order.symbol, order.exit_time)['Close']
             self._update_order_profit(order)
             self.equity += order.profit
+            
 
         while self.margin_level < self.stop_out_level and len(self.orders) > 0:
             most_unprofitable_order = min(self.orders, key=lambda order: order.profit)
@@ -145,16 +147,40 @@ class BinanceSimulator:
         except KeyError:
             i, = df.index.get_indexer([time], method='bfill')
         return df.index[i]
+    
+    def nearest_times(self, symbol: str, time: np.ndarray) -> np.ndarray:
+        df = self.symbols_data[symbol]
+        result = np.zeros_like(time)
+        time_df = pd.DataFrame(index=time)
 
+        # left join with original DataFrame
+        merged_df = time_df.merge(df, how='left', left_index=True, right_index=True, indicator=True)
+        mask = merged_df['_merge'] == 'both'
+        result[mask] = time[mask]
+
+        try:
+            indexer = df.index.get_indexer(time[~mask], method='ffill')
+        except KeyError:
+            indexer = df.index.get_indexer(time[~mask], method='bfill')
+
+        result[~mask] = df.index[indexer]
+        return result
 
     def price_at(self, symbol: str, time: datetime) -> pd.Series:
         df = self.symbols_data[symbol]
         time = self.nearest_time(symbol, time)
         return df.loc[time]
-
-    def feature_at(self, symbol: str, time: datetime) -> pd.Series:
+    
+    def prices_at(self, symbol: str, time: List[datetime]) -> pd.Series:
+        df = self.symbols_data[symbol]
+        time = np.array(time)
+        time = self.nearest_times(symbol, time)
+        return df.loc[time]
+    
+    def features_at(self, symbol: str, time: datetime) -> pd.Series:
         df = self.symbols_data_normalized[symbol]
-        time = self.nearest_time(symbol, time)
+        time = np.array(time)
+        time = self.nearest_times(symbol, time)
         return df.loc[time]
 
     def symbol_orders(self, symbol: str) -> List[Order]:
@@ -181,10 +207,14 @@ class BinanceSimulator:
         entry_price = self.price_at(symbol, entry_time)['Close']
         exit_time = entry_time
         exit_price = entry_price
+        entry_balance = self.equity
+
+        take_profit_at, stop_loss_at = self._calculate_takeprofit_and_stoploss(entry_price, volume, entry_balance)
 
         order = Order(
             order_id, order_type, symbol, volume, fee,
-            entry_time, entry_price, exit_time, exit_price
+            entry_time, entry_price, exit_time, exit_price, entry_balance,
+            take_profit_at, stop_loss_at
         )
         self._update_order_profit(order)
         self._update_order_margin(order)
@@ -218,10 +248,14 @@ class BinanceSimulator:
 
             old_order.volume += new_order.volume
             old_order.profit += new_order.profit
+            old_order.dragdown = min([old_order.profit, old_order.dragdown])
+            old_order.highestprofit = max([old_order.profit, old_order.highestprofit])
             old_order.margin += new_order.margin
             old_order.entry_price = entry_price_weighted_average
             old_order.fee = max(old_order.fee, new_order.fee)
-
+            old_order.order_added_count += 1
+            
+            old_order.take_profit_at, old_order.stop_loss_at = self._calculate_takeprofit_and_stoploss(entry_price_weighted_average, old_order.volume, self.balance)
             return old_order
 
         if volume >= old_order.volume:
@@ -274,6 +308,8 @@ class BinanceSimulator:
                 'Exit Time': order.exit_time,
                 'Exit Price': order.exit_price,
                 'Profit': order.profit,
+                "Dragdown": order.dragdown,
+                "HighestProfit": order.highestprofit,
                 'Margin': order.margin,
                 'Fee': order.fee,
                 'Closed': order.closed,
@@ -296,6 +332,8 @@ class BinanceSimulator:
         v = order.volume * self.symbols_info[order.symbol].trade_contract_size
         local_profit = v * (order.type.sign * diff - order.fee)
         order.profit = local_profit * self._get_unit_ratio(order.symbol, order.exit_time)
+        order.dragdown = min([order.dragdown, order.profit])
+        order.highestprofit = max([order.highestprofit, order.profit])
 
 
     def _update_order_margin(self, order: Order) -> None:
@@ -345,3 +383,14 @@ class BinanceSimulator:
             )
         if not round(volume / symbol_info.volume_step, 6).is_integer():
             raise ValueError(f"'volume' must be a multiple of {symbol_info.volume_step}")
+        
+    def _calculate_takeprofit_and_stoploss(self, entry_price : float, volume : float, balance : float):
+        max_risk_per_trade = self.risk_ratio * -balance
+
+        take_profit_at = (volume / self.leverage) * entry_price
+        stop_loss_at = take_profit_at / -2
+        if(stop_loss_at < max_risk_per_trade):
+            stop_loss_at = max_risk_per_trade
+            take_profit_at = stop_loss_at * -2
+        
+        return take_profit_at, stop_loss_at

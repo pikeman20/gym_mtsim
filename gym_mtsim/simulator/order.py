@@ -23,7 +23,7 @@ class Order:
         self,
         id: int, type: OrderType, symbol: str, volume: float, fee: float,
         entry_time: datetime, entry_price: float,
-        exit_time: datetime, exit_price: float
+        exit_time: datetime, exit_price: float, entry_balance: float, take_profit_at: float, stop_loss_at: float
     ) -> None:
 
         self.id = id
@@ -36,5 +36,11 @@ class Order:
         self.exit_time = exit_time
         self.exit_price = exit_price
         self.profit = 0.
+        self.dragdown = 0.
+        self.highestprofit = 0.
         self.margin = 0.
         self.closed = False
+        self.take_profit_at = take_profit_at
+        self.stop_loss_at = stop_loss_at
+        self.order_added_count = 0
+        self.entry_balance = entry_balance

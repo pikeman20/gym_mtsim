@@ -129,7 +129,7 @@ class MtEnv(gym.Env):
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
         action = self._normalize_action(action)
-        print(action)
+        # print(action)
         orders_info, closed_orders_info = self._apply_action(action)
 
         self._current_tick += 1

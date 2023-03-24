@@ -82,8 +82,8 @@ class MtEnv(gym.Env):
             'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
                 low=-np.inf, high=np.inf, dtype=np.float32,
-                shape=(len(self.trading_symbols), self.symbol_max_orders, 4)
-            ),  # symbol, order_i -> [entry_price, volume, profit, orders_added_count]
+                shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
+            ),  # symbol, order_i -> [entry_price, volume, profit]
         })
 
         # episode
@@ -255,7 +255,7 @@ class MtEnv(gym.Env):
         for i, symbol in enumerate(self.trading_symbols):
             symbol_orders = self.simulator.symbol_orders(symbol)
             for j, order in enumerate(symbol_orders):
-                orders[i, j] = [order.entry_price, order.volume, order.profit, order.order_added_count]
+                orders[i, j] = [order.entry_price, order.volume, order.profit]
 
         observation = {
             'balance': np.array([self.simulator.balance]),
@@ -274,7 +274,7 @@ class MtEnv(gym.Env):
         step_reward = 0
         reward_description = ''
 
-        bonus_open_order_deduct_ratio = -0.05
+        bonus_open_order_deduct_ratio = -0.001
         take_profit_reached_ratio = 0.5
         stop_loss_reached_ratio = 0.5
         holding_order_weight = 0.1
@@ -312,18 +312,6 @@ class MtEnv(gym.Env):
                     sl_reach_bonus *= stop_loss_reached_ratio
                     step_reward += sl_reach_bonus
                     reward_description += f"SL reached bonus (+): {sl_reach_bonus}<br> "
-
-                #Add penalty when it's add more volumes to order in multiple times   
-                penatyAddOrder = order.order_added_count
-                if(penatyAddOrder <= 5):
-                    penatyAddOrder *= 0.001
-                elif(penatyAddOrder <= 10):
-                    penatyAddOrder *= 0.01
-                else:
-                    penatyAddOrder *= 0.1
-                    
-                step_reward -= penatyAddOrder
-                reward_description += f"Penalty added (-): {penatyAddOrder}<br> "
 
             total_profit = 0.0
             # Calculate the profit from closed orders

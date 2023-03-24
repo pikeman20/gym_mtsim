@@ -129,7 +129,7 @@ register(
         'window_size': 50,
         'symbol_max_orders': 2,
         'fee': lambda symbol: {
-            'BTCUSDT': 0.04,
+            'BTCUSDT': 0.0004,
         }[symbol]
     }
 )
@@ -142,7 +142,7 @@ register(
         'trading_symbols': ['BTCUSDT'],
         'window_size': 50,
         'fee': lambda symbol: {
-            'BTCUSDT': 0.04,
+            'BTCUSDT': 0.0004,
         }[symbol]
     }
 )

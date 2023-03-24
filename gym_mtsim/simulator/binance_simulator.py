@@ -191,29 +191,29 @@ class BinanceSimulator:
         return symbol_orders
 
 
-    def create_order(self, order_type: OrderType, symbol: str, volume: float, fee: float=0.0005) -> Order:
+    def create_order(self, order_type: OrderType, symbol: str, volume: float, fee_rate: float=0.0005) -> Order:
         self._check_current_time()
         self._check_volume(symbol, volume)
-        if fee < 0.:
-            raise ValueError(f"negative fee '{fee}'")
+        if fee_rate < 0.:
+            raise ValueError(f"negative fee rate '{fee_rate}'")
 
         if self.hedge:
-            return self._create_hedged_order(order_type, symbol, volume, fee)
-        return self._create_unhedged_order(order_type, symbol, volume, fee)
+            return self._create_hedged_order(order_type, symbol, volume, fee_rate)
+        return self._create_unhedged_order(order_type, symbol, volume, fee_rate)
 
 
-    def _create_hedged_order(self, order_type: OrderType, symbol: str, volume: float, fee: float) -> Order:
+    def _create_hedged_order(self, order_type: OrderType, symbol: str, volume: float, fee_rate: float) -> Order:
         order_id = len(self.closed_orders) + len(self.orders) + 1
         entry_time = self.current_time
         entry_price = self.price_at(symbol, entry_time)['Close']
         exit_time = entry_time
         exit_price = entry_price
         entry_balance = self.equity
-
+        order_fee = fee_rate * (volume * entry_price)
         take_profit_at, stop_loss_at = self._calculate_takeprofit_and_stoploss(entry_price, volume, entry_balance)
 
         order = Order(
-            order_id, order_type, symbol, volume, fee,
+            order_id, order_type, symbol, volume, fee_rate, order_fee,
             entry_time, entry_price, exit_time, exit_price, entry_balance,
             take_profit_at, stop_loss_at
         )
@@ -232,14 +232,14 @@ class BinanceSimulator:
         return order
 
 
-    def _create_unhedged_order(self, order_type: OrderType, symbol: str, volume: float, fee: float) -> Order:
+    def _create_unhedged_order(self, order_type: OrderType, symbol: str, volume: float, fee_rate: float) -> Order:
         if symbol not in map(lambda order: order.symbol, self.orders):
-            return self._create_hedged_order(order_type, symbol, volume, fee)
+            return self._create_hedged_order(order_type, symbol, volume, fee_rate)
 
         old_order: Order = self.symbol_orders(symbol)[0]
 
         if old_order.type == order_type:
-            new_order = self._create_hedged_order(order_type, symbol, volume, fee)
+            new_order = self._create_hedged_order(order_type, symbol, volume, fee_rate)
             self.orders.remove(new_order)
 
             entry_price_weighted_average = np.average(
@@ -253,8 +253,8 @@ class BinanceSimulator:
             old_order.highestprofit = max([old_order.profit, old_order.highestprofit])
             old_order.margin += new_order.margin
             old_order.entry_price = entry_price_weighted_average
-            old_order.fee = max(old_order.fee, new_order.fee)
-            old_order.order_added_count += 1
+            old_order.fee_rate = max(old_order.fee, new_order.fee)
+            old_order.fee += new_order.fee
             
             old_order.take_profit_at, old_order.stop_loss_at = self._calculate_takeprofit_and_stoploss(entry_price_weighted_average, old_order.volume, self.balance)
             return old_order
@@ -262,7 +262,7 @@ class BinanceSimulator:
         if volume >= old_order.volume:
              self.close_order(old_order)
              if volume > old_order.volume:
-                 return self._create_hedged_order(order_type, symbol, volume - old_order.volume, fee)
+                 return self._create_hedged_order(order_type, symbol, volume - old_order.volume, fee_rate)
              return old_order
 
         partial_profit = (volume / old_order.volume) * old_order.profit
@@ -285,6 +285,8 @@ class BinanceSimulator:
 
         order.exit_time = self.current_time
         order.exit_price = self.price_at(order.symbol, order.exit_time)['Close']
+        order.fee += order.fee_rate * order.volume * order.exit_price
+
         self._update_order_profit(order)
 
         self.balance += order.profit
@@ -331,16 +333,21 @@ class BinanceSimulator:
     def _update_order_profit(self, order: Order) -> None:
         diff = order.exit_price - order.entry_price
         v = order.volume * self.symbols_info[order.symbol].trade_contract_size
-        local_profit = v * (order.type.sign * diff - order.fee)
+        local_profit = v * (order.type.sign * diff)
+
         order.profit = local_profit * self._get_unit_ratio(order.symbol, order.exit_time)
+        order.profit -= order.fee
+
         order.dragdown = min([order.dragdown, order.profit])
         order.highestprofit = max([order.highestprofit, order.profit])
 
 
     def _update_order_margin(self, order: Order) -> None:
         v = order.volume * self.symbols_info[order.symbol].trade_contract_size
+
         local_margin = (v * order.entry_price) / self.leverage
         local_margin *= self.symbols_info[order.symbol].margin_rate
+        
         order.margin = local_margin * self._get_unit_ratio(order.symbol, order.entry_time)
 
 

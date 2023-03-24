@@ -2,3 +2,4 @@ __pycache__/*
 */__pycache__/*
 build/*
 gym_mtsim.egg-info/*
+gym_mtsim/*/__pycache__/*

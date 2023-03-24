@@ -39,10 +39,11 @@ class BinanceSimulator:
         self.closed_orders: List[Order] = []
         self.current_time: datetime = NotImplemented
         self.risk_ratio = risk_ratio
-        if symbols_filename:
-            if not self.load_symbols(symbols_filename):
-                raise FileNotFoundError(f"file '{symbols_filename}' not found")
-
+        try:
+            if symbols_filename:
+                if not self.load_symbols(symbols_filename):
+                    raise FileNotFoundError(f"file '{symbols_filename}' not found")
+        except Exception as e: print(e)
 
     @property
     def free_margin(self) -> float:

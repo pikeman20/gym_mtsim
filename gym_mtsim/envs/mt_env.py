@@ -129,7 +129,7 @@ class MtEnv(gym.Env):
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
         action = self._normalize_action(action)
-        # print(action)
+        #print(action)
         orders_info, closed_orders_info = self._apply_action(action)
 
         self._current_tick += 1
@@ -273,6 +273,12 @@ class MtEnv(gym.Env):
         current_equity = self.simulator.equity
         step_reward = 0
         reward_description = ''
+
+        bonus_open_order_deduct_ratio = -0.05
+        take_profit_reached_ratio = 0.5
+        stop_loss_reached_ratio = 0.5
+        holding_order_weight = 0.1
+
         # Check if the agent has run out of money
         if current_equity <= 0:
             step_reward = -100
@@ -281,7 +287,7 @@ class MtEnv(gym.Env):
             # Bonus for opening a new order
             bonus_for_open_order = 0.
             if len(self.simulator.orders) == 0:
-                bonus_for_open_order = random.uniform(-0.2, 0)
+                bonus_for_open_order = random.uniform(bonus_open_order_deduct_ratio, 0)
 
             step_reward += bonus_for_open_order
             reward_description += f"Bonus (+): {bonus_for_open_order}<br> "
@@ -290,22 +296,34 @@ class MtEnv(gym.Env):
             for order in self.simulator.orders:
                 penalty_for_holding_order += self._bar_between_interval(order.entry_time, self.simulator.current_time)
             
-            step_reward -= penalty_for_holding_order * 0.01
-            reward_description += f"Penalty hold (-): {penalty_for_holding_order * 0.1}<br> "
+            penalty_for_holding_order *= holding_order_weight
+            step_reward -= penalty_for_holding_order
+            reward_description += f"Penalty hold (-): {penalty_for_holding_order}<br> "
 
             # 
             for order in self.simulator.orders:
                 if(order.profit >= order.take_profit_at):
                     tp_reach_bonus = self._calculate_ratio(order.take_profit_at, order.profit)
+                    tp_reach_bonus *= take_profit_reached_ratio
                     step_reward += tp_reach_bonus
                     reward_description += f"Tp reached bonus (+): {tp_reach_bonus}<br> "
                 elif(order.profit <= order.stop_loss_at):
                     sl_reach_bonus = self._calculate_ratio(abs(order.stop_loss_at), abs(order.profit))
+                    sl_reach_bonus *= stop_loss_reached_ratio
                     step_reward += sl_reach_bonus
                     reward_description += f"SL reached bonus (+): {sl_reach_bonus}<br> "
-                #Add penalty when it's add more volumes to order in multiple times           
-                step_reward -= order.order_added_count * 0.01
-                reward_description += f"Penalty added (-): {order.order_added_count * 0.001}<br> "
+
+                #Add penalty when it's add more volumes to order in multiple times   
+                penatyAddOrder = order.order_added_count
+                if(penatyAddOrder <= 5):
+                    penatyAddOrder *= 0.001
+                elif(penatyAddOrder <= 10):
+                    penatyAddOrder *= 0.01
+                else:
+                    penatyAddOrder *= 0.1
+                    
+                step_reward -= penatyAddOrder
+                reward_description += f"Penalty added (-): {penatyAddOrder}<br> "
 
             total_profit = 0.0
             # Calculate the profit from closed orders
@@ -341,12 +359,15 @@ class MtEnv(gym.Env):
             # Add the profit and equity change to the step reward
             step_reward += total_profit
             equity_change = self._calculate_ratio(current_equity, prev_equity)
-            step_reward += equity_change * 0.5
-            reward_description += f"Equity change (+): {equity_change * 0.5}<br> "
+            # Focus on equity change
+            equity_change *= 2
+            step_reward += equity_change
+
+            reward_description += f"Equity change (+): {equity_change}<br> "
             # Add a reward for maintaining a high rate of return
             rate_of_return = self._calculate_ratio(current_equity, self.simulator.balance)
-            step_reward += 0.1 * rate_of_return
-            reward_description += f"Rate of return (+): {0.1 * rate_of_return}<br> "
+            step_reward += rate_of_return
+            reward_description += f"Rate of return (+): {rate_of_return}<br> "
             # # Add a penalty for overleveraging
             # balance_margin_ratio = self.simulator.balance / self.simulator.margin
             # if balance_margin_ratio > 2:

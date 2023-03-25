@@ -350,8 +350,12 @@ class MtEnv(gym.Env):
             # Focus on equity change
             equity_change *= 2
             step_reward += equity_change
-
             reward_description += f"Equity change (+): {equity_change}<br> "
+
+            balance_changes = self._calculate_ratio(self.simulator.balance, self.original_simulator.balance)
+            step_reward += balance_changes
+            reward_description += f"Balance change (+): {balance_changes}<br> "
+
             # Add a reward for maintaining a high rate of return
             rate_of_return = self._calculate_ratio(current_equity, self.simulator.balance)
             step_reward += rate_of_return
@@ -594,10 +598,10 @@ class MtEnv(gym.Env):
                     y=close_price[close_ticks],
                     mode='markers',
                     hovertext=close_extra_info,
-                    marker_symbol='line-ns',
-                    marker_color='black',
+                    marker_symbol='diamond-wide',
+                    marker_color='yellow',
                     marker_size=7,
-                    marker_line_width=1.5,
+                    marker_line_width=2,
                     name=symbol,
                     yaxis=f'y{j+1}',
                     showlegend=False,

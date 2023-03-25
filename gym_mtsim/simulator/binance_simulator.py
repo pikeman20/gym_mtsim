@@ -253,7 +253,7 @@ class BinanceSimulator:
             old_order.highestprofit = max([old_order.profit, old_order.highestprofit])
             old_order.margin += new_order.margin
             old_order.entry_price = entry_price_weighted_average
-            old_order.fee_rate = max(old_order.fee, new_order.fee)
+            old_order.fee_rate = max(old_order.fee_rate, new_order.fee_rate)
             old_order.fee += new_order.fee
             
             old_order.take_profit_at, old_order.stop_loss_at = self._calculate_takeprofit_and_stoploss(entry_price_weighted_average, old_order.volume, self.balance)

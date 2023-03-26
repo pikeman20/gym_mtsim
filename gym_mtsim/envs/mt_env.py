@@ -3,7 +3,6 @@ from typing import List, Tuple, Dict, Any, Optional, Union, Callable
 import copy
 from datetime import datetime, timedelta
 from plotly.graph_objects import Figure
-from pathos.multiprocessing import ProcessingPool as Pool
 
 import numpy as np
 from scipy.special import expit
@@ -28,7 +27,7 @@ class MtEnv(gym.Env):
             window_size: int, time_points: Optional[List[datetime]]=None,
             hold_threshold: float=0.5, close_threshold: float=0.5,
             fee: Union[float, Callable[[str], float]]=0.0005, env_size: int = 200,
-            symbol_max_orders: int=1, multiprocessing_processes: Optional[int]=None, saveImgInReset: bool=False
+            symbol_max_orders: int=1, saveImgInReset: bool=False
         ) -> None:
 
         # validations
@@ -61,7 +60,6 @@ class MtEnv(gym.Env):
         self.close_threshold = close_threshold
         self.fee = fee
         self.symbol_max_orders = symbol_max_orders
-        self.multiprocessing_pool = Pool(multiprocessing_processes) if multiprocessing_processes else None
         self._is_dead = 0
         self.prices = self._get_prices()
         self.signal_features = self._process_data()
@@ -275,9 +273,12 @@ class MtEnv(gym.Env):
         reward_description = ''
 
         bonus_open_order_deduct_ratio = -0.001
-        take_profit_reached_ratio = 0.5
-        stop_loss_reached_ratio = 0.5
+        take_profit_reached_ratio = 0.3
+        stop_loss_reached_ratio = 0.3
         holding_order_weight = 0.1
+        equity_change_weight = 3
+        rate_of_return_weight = 2
+        penalty_for_overleveraging_weight = 0.1
 
         # Check if the agent has run out of money
         if current_equity <= 0:
@@ -348,7 +349,7 @@ class MtEnv(gym.Env):
             step_reward += total_profit
             equity_change = self._calculate_ratio(current_equity, prev_equity)
             # Focus on equity change
-            equity_change *= 2
+            equity_change *= equity_change_weight
             step_reward += equity_change
             reward_description += f"Equity change (+): {equity_change}<br> "
 
@@ -358,12 +359,16 @@ class MtEnv(gym.Env):
 
             # Add a reward for maintaining a high rate of return
             rate_of_return = self._calculate_ratio(current_equity, self.simulator.balance)
+            rate_of_return *= rate_of_return_weight
             step_reward += rate_of_return
             reward_description += f"Rate of return (+): {rate_of_return}<br> "
+
             # # Add a penalty for overleveraging
-            # balance_margin_ratio = self.simulator.balance / self.simulator.margin
-            # if balance_margin_ratio > 2:
-            #     step_reward -= 0.1
+            if self.simulator.margin / self.simulator.equity > 0.9:
+                penalty_for_overleveraging = self.simulator.margin / self.simulator.equity
+                penalty_for_overleveraging *= penalty_for_overleveraging_weight
+                step_reward -= penalty_for_overleveraging
+                reward_description += f"Overleveraging penalty (-): {penalty_for_overleveraging}<br> "
 
         return step_reward, reward_description
 

@@ -3,7 +3,7 @@ from gym.envs.registration import register
 from .metatrader import Timeframe, SymbolInfo
 from .simulator import BinanceSimulator, OrderType, Order, SymbolNotFound, OrderNotFound
 from .envs import MtEnv
-from .data import FOREX_DATA_PATH, STOCKS_DATA_PATH, CRYPTO_DATA_PATH, MIXED_DATA_PATH, BINANCE_DATA_PATH
+from .data import FOREX_DATA_PATH, STOCKS_DATA_PATH, CRYPTO_DATA_PATH, MIXED_DATA_PATH, BINANCE_DATA_PATH, BINANCE_DATA_GPU_PATH
 
 
 register(
@@ -146,3 +146,36 @@ register(
         }[symbol]
     }
 )
+
+try:
+    import cudf
+except ImportError:
+    print("cudf is not installed.")
+else:
+    register(
+        id='binance-hedge-gpu-v0',
+        entry_point='gym_mtsim.envs:MtEnv',
+        kwargs={
+            'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=True),
+            'trading_symbols': ['BTCUSDT'],
+            'window_size': 50,
+            'symbol_max_orders': 2,
+            'fee': lambda symbol: {
+                'BTCUSDT': 0.0004,
+            }[symbol]
+        }
+    )
+
+    register(
+        id='binance-unhedge-gpu-v0',
+        entry_point='gym_mtsim.envs:MtEnv',
+        kwargs={
+            'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=False),
+            'trading_symbols': ['BTCUSDT'],
+            'window_size': 50,
+            'fee': lambda symbol: {
+                'BTCUSDT': 0.0004,
+            }[symbol]
+        }
+    )
+

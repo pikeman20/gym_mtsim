@@ -6,6 +6,4 @@ try:
     from .binance_simulator_gpu import BinanceSimulatorGPU
 except ImportError:
     print("cudf is not installed.")
-else:
-
 

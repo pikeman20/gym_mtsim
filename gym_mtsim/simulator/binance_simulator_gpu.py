@@ -5,8 +5,8 @@ import pickle
 import json
 from datetime import datetime, timedelta
 
-import numpy as np
-import pandas as pd
+import cupy as np
+import cudf as pd
 
 from gym_mtsim.data import BINANCE_SYMBOL_PATH, BINANCE_SYMBOL_CSV_PATH
 

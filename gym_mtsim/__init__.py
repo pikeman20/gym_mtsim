@@ -149,6 +149,7 @@ register(
 
 try:
     import cudf
+    from .simulator import BinanceSimulatorGPU
 except ImportError:
     print("cudf is not installed.")
 else:
@@ -156,7 +157,7 @@ else:
         id='binance-hedge-gpu-v0',
         entry_point='gym_mtsim.envs:MtEnv',
         kwargs={
-            'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=True),
+            'original_simulator': BinanceSimulatorGPU(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=True),
             'trading_symbols': ['BTCUSDT'],
             'window_size': 50,
             'symbol_max_orders': 2,
@@ -170,7 +171,7 @@ else:
         id='binance-unhedge-gpu-v0',
         entry_point='gym_mtsim.envs:MtEnv',
         kwargs={
-            'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=False),
+            'original_simulator': BinanceSimulatorGPU(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=False),
             'trading_symbols': ['BTCUSDT'],
             'window_size': 50,
             'fee': lambda symbol: {

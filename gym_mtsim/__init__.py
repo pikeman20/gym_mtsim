@@ -1,6 +1,7 @@
-try:
+import sys
+if 'gymnasium' in sys.modules:
     from gymnasium.envs.registration import register
-except:
+else:
     from gym.envs.registration import register
 
 from .metatrader import Timeframe, SymbolInfo

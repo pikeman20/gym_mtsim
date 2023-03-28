@@ -13,14 +13,16 @@ import matplotlib.cm as plt_cm
 import matplotlib.colors as plt_colors
 import plotly.graph_objects as go
 import os
-try:
+import sys
+if 'gymnasium' in sys.modules:
     import gymnasium as gym
     from gymnasium import spaces
     from gymnasium.utils import seeding
-except:
+else:
     import gym
     from gym import spaces
     from gym.utils import seeding
+
 
 from ..simulator import BinanceSimulator, OrderType
 
@@ -131,10 +133,11 @@ class MtEnv(gym.Env):
         end_tick = start_tick + self.env_size
         
         return start_tick, end_tick
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        return self.reset(), self.history[0]
 
-    def reset(self, seed: int = None, options = None) -> Dict[str, np.ndarray]:
-        if(not self.old_gym):
-            super().reset(seed=seed)
+    def reset(self) -> Dict[str, np.ndarray]:
         try:
             if(self.save_img_in_reset and os.path.exists("img_log") and self.history != NotImplemented and len(self.history) > 0):
                 fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
@@ -149,9 +152,8 @@ class MtEnv(gym.Env):
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
-        info = self._create_info(step_reward = 0, reward_description = "")
-        self.history = [info]
-        return self._get_observation(), info
+        self.history = [self._create_info(step_reward = 0, reward_description = "")]
+        return self._get_observation()
 
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
@@ -177,10 +179,12 @@ class MtEnv(gym.Env):
         if(self._is_dead):
             self._done = True
         truncated = False
-        if(self.old_gym):
-            return observation, step_reward, self._done, info 
+        
+        if 'gymnasium' in sys.modules:
+            return observation, step_reward, self._done, truncated, info
         else:
-            return observation, step_reward, self._done, truncated, info #truncated = False
+            return observation, step_reward, self._done, info 
+
 
     def _apply_action(self, action: np.ndarray) -> Tuple[Dict, Dict]:
         orders_info = {}
@@ -302,7 +306,7 @@ class MtEnv(gym.Env):
             'balance': np.array([self.simulator.balance]),
             'equity': np.array([self.simulator.equity]),
             'margin': np.array([self.simulator.margin]),
-            'is_dead': np.array([self._is_dead], dtype=int),
+            'is_dead': np.array([self._is_dead]),
             'features': features,
             'orders': orders,
         }
@@ -315,7 +319,7 @@ class MtEnv(gym.Env):
         step_reward = 0
         reward_description = ''
 
-        bonus_open_order_deduct_ratio = -0.001
+        bonus_open_order_deduct_ratio = -0.005
         take_profit_reached_ratio = 0.3
         stop_loss_reached_ratio = 0.3
         holding_order_weight = 0.1

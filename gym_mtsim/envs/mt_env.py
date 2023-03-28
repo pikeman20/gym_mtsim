@@ -83,18 +83,18 @@ class MtEnv(gym.Env):
         self.old_gym = old_gym
         # spaces
         self.action_space = spaces.Box(
-            low=-1e9, high=1e9, dtype=np.float32,
+            low=-1e9, high=1e9, dtype=np.float64,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
         # self.observation_space = spaces.Dict({
-        #     'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-        #     'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-        #     'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+        #     'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+        #     'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
         #     'is_dead': spaces.Discrete(2), # 0 = not dead, 1 = dead
-        #     'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
+        #     'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float64),
         #     'orders': spaces.Box(
-        #         low=-np.inf, high=np.inf, dtype=np.float32,
+        #         low=-np.inf, high=np.inf, dtype=np.float64,
         #         shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
         #     ),  # symbol, order_i -> [entry_price, volume, profit]
         # })
@@ -102,13 +102,13 @@ class MtEnv(gym.Env):
         flattened_orders_shape = (len(self.trading_symbols) * self.symbol_max_orders * 3,)
 
         self.observation_space = spaces.Dict({
-            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
             'is_dead': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
-            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
+            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float64),
             'orders': spaces.Box(
-                low=-np.inf, high=np.inf, dtype=np.float32,
+                low=-np.inf, high=np.inf, dtype=np.float64,
                 shape=flattened_orders_shape
             ),  # symbol, order_i -> [entry_price, volume, profit]
         })
@@ -153,7 +153,10 @@ class MtEnv(gym.Env):
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
         self.history = [self._create_info(step_reward = 0, reward_description = "")]
-        return self._get_observation(), self.history[0]
+        if not self.old_gym:
+            return self._get_observation(), self.history[0]
+        else:
+            return self._get_observation()
 
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
@@ -306,7 +309,7 @@ class MtEnv(gym.Env):
             'balance': np.array([self.simulator.balance]),
             'equity': np.array([self.simulator.equity]),
             'margin': np.array([self.simulator.margin]),
-            'is_dead': np.array([self._is_dead]),
+            'is_dead': np.array([self._is_dead], dtype=np.int32),
             'features': features,
             'orders': orders,
         }
@@ -703,5 +706,5 @@ class MtEnv(gym.Env):
         formatted_str = np.array2string(action, formatter={'float_kind':
         lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '')})
         formatted_str = formatted_str.replace('[', '').replace(']', '').replace('\n', '')
-        formatted_array = np.fromiter(formatted_str.split(), dtype=np.float32)
+        formatted_array = np.fromiter(formatted_str.split(), dtype=np.float64)
         return formatted_array

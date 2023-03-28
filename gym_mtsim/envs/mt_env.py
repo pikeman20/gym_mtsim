@@ -288,7 +288,7 @@ class MtEnv(gym.Env):
 
         orders = np.zeros(np.prod(self.observation_space['orders'].shape))
         orders_shape = [len(self.trading_symbols), self.symbol_max_orders, 3]
-
+ 
         for i, symbol in enumerate(self.trading_symbols):
             symbol_orders = self.simulator.symbol_orders(symbol)
             for j, order in enumerate(symbol_orders):

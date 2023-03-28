@@ -14,7 +14,6 @@ from ..metatrader import Timeframe, SymbolInfo, _local2utc
 from .order import OrderType, Order
 from .exceptions import SymbolNotFound, OrderNotFound
 
-
 class BinanceSimulatorGPU:
 
     def __init__(
@@ -144,9 +143,9 @@ class BinanceSimulatorGPU:
         if time in df.index:
             return time
         try:
-            i, = df.index.get_indexer([time], method='ffill')
+            i, = df.index.searchsorted([time], method='ffill')
         except KeyError:
-            i, = df.index.get_indexer([time], method='bfill')
+            i, = df.index.searchsorted([time], method='bfill')
         return df.index[i]
     
     def nearest_times(self, symbol: str, time: np.ndarray) -> np.ndarray:
@@ -155,16 +154,19 @@ class BinanceSimulatorGPU:
         time_df = pd.DataFrame(index=time)
 
         # left join with original DataFrame
-        merged_df = time_df.merge(df, how='left', left_index=True, right_index=True, indicator=True)
-        mask = merged_df['_merge'] == 'both'
+        merged_df = time_df.merge(df, how='left', left_index=True, right_index=True, indicator=False)
+        mask = merged_df.notna().any(axis=1)
         result[mask] = time[mask]
 
         try:
-            indexer = df.index.get_indexer(time[~mask], method='ffill')
-        except KeyError:
-            indexer = df.index.get_indexer(time[~mask], method='bfill')
+            indexer = df.index.searchsorted(time[~mask], side='right')
+            indexer = indexer.clip(0, len(df.index) - 1)
+        except IndexError:
+            indexer = df.index.searchsorted(time[~mask], side='left')
+            indexer = indexer.clip(0, len(df.index) - 1)
 
-        result[~mask] = df.index[indexer]
+        index_values = df.index.astype('datetime64[ms]').astype('int64').to_arrow().tolist()
+        result[~mask] = pd.Series(index_values)[indexer]
         return result
 
     def price_at(self, symbol: str, time: datetime) -> pd.Series:

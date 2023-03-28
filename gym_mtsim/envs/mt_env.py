@@ -13,9 +13,15 @@ import matplotlib.cm as plt_cm
 import matplotlib.colors as plt_colors
 import plotly.graph_objects as go
 import os
-import gym
-from gym import spaces
-from gym.utils import seeding
+try:
+    import gymnasium as gym
+    from gymnasium import spaces
+    from gymnasium.utils import seeding
+except:
+    import gym
+    from gym import spaces
+    from gym.utils import seeding
+
 from ..simulator import BinanceSimulator, OrderType
 
 class MtEnv(gym.Env):
@@ -27,7 +33,7 @@ class MtEnv(gym.Env):
             window_size: int, time_points: Optional[List[datetime]]=None,
             hold_threshold: float=0.5, close_threshold: float=0.5,
             fee: Union[float, Callable[[str], float]]=0.0005, env_size: int = 200,
-            symbol_max_orders: int=1, saveImgInReset: bool=False
+            symbol_max_orders: int=1, save_img_in_reset: bool=False, old_gym: bool = False
         ) -> None:
 
         # validations
@@ -46,7 +52,13 @@ class MtEnv(gym.Env):
                    f"unit symbol for '{currency_profit}' not found"
 
         if time_points is None:
-            time_points = original_simulator.symbols_data[trading_symbols[0]].index.to_pydatetime().tolist()
+            try:
+                import cudf
+                datetime_index = original_simulator.symbols_data[trading_symbols[0]].index
+                time_points = datetime_index.astype('datetime64[ms]').astype('int64').to_arrow().tolist()
+            except ImportError:
+                time_points = original_simulator.symbols_data[trading_symbols[0]].index.to_pydatetime().tolist()
+        
         assert len(time_points) > window_size, "not enough time points provided"
 
         # attributes
@@ -65,25 +77,39 @@ class MtEnv(gym.Env):
         self.signal_features = self._process_data()
         self.features_shape = (window_size, self.signal_features.shape[1])
         self.initBalance = original_simulator.balance
-        self.saveImgInReset = saveImgInReset
+        self.save_img_in_reset = save_img_in_reset
+        self.old_gym = old_gym
         # spaces
         self.action_space = spaces.Box(
             low=-1e9, high=1e9, dtype=np.float32,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
+        # self.observation_space = spaces.Dict({
+        #     'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'is_dead': spaces.Discrete(2), # 0 = not dead, 1 = dead
+        #     'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
+        #     'orders': spaces.Box(
+        #         low=-np.inf, high=np.inf, dtype=np.float32,
+        #         shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
+        #     ),  # symbol, order_i -> [entry_price, volume, profit]
+        # })
+        # Flatten the 'orders' component
+        flattened_orders_shape = (len(self.trading_symbols) * self.symbol_max_orders * 3,)
+
         self.observation_space = spaces.Dict({
             'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-            'is_dead': spaces.Discrete(2), # 0 = not dead, 1 = dead
+            'is_dead': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
             'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
                 low=-np.inf, high=np.inf, dtype=np.float32,
-                shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
+                shape=flattened_orders_shape
             ),  # symbol, order_i -> [entry_price, volume, profit]
         })
-
         # episode
         self._start_tick, self._end_tick = self.getEnvironmentRange()
 
@@ -106,9 +132,11 @@ class MtEnv(gym.Env):
         
         return start_tick, end_tick
 
-    def reset(self) -> Dict[str, np.ndarray]:
+    def reset(self, seed: int = None, options: dict[str, Any] = None) -> Dict[str, np.ndarray]:
+        if(not self.old_gym):
+            super().reset(seed=seed)
         try:
-            if(self.saveImgInReset and os.path.exists("img_log") and self.history != NotImplemented and len(self.history) > 0):
+            if(self.save_img_in_reset and os.path.exists("img_log") and self.history != NotImplemented and len(self.history) > 0):
                 fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
                 timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 fig.write_image(f"img_log/log_{self.simulator.balance}_{timestamp_str}.png")
@@ -121,8 +149,9 @@ class MtEnv(gym.Env):
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
-        self.history = [self._create_info(step_reward = 0, reward_description = "")]
-        return self._get_observation()
+        info = self._create_info(step_reward = 0, reward_description = "")
+        self.history = [info]
+        return self._get_observation(), info
 
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
@@ -147,9 +176,11 @@ class MtEnv(gym.Env):
         self.history.append(info)
         if(self._is_dead):
             self._done = True
-
-        return observation, step_reward, self._done, info
-
+        truncated = False
+        if(self.old_gym):
+            return observation, step_reward, self._done, info #truncated = False
+        else:
+            return observation, step_reward, self._done, truncated, info
 
     def _apply_action(self, action: np.ndarray) -> Tuple[Dict, Dict]:
         orders_info = {}
@@ -249,17 +280,29 @@ class MtEnv(gym.Env):
     def _get_observation(self) -> Dict[str, np.ndarray]:
         features = self.signal_features[(self._current_tick-self.window_size+1):(self._current_tick+1)]
 
-        orders = np.zeros(self.observation_space['orders'].shape)
+        # orders = np.zeros((len(self.trading_symbols), self.symbol_max_orders, 3))
+        # for i, symbol in enumerate(self.trading_symbols):
+        #     symbol_orders = self.simulator.symbol_orders(symbol)
+        #     for j, order in enumerate(symbol_orders):
+        #         orders[i, j] = [order.entry_price, order.volume, order.profit]
+
+        orders = np.zeros(np.prod(self.observation_space['orders'].shape))
+        orders_shape = [len(self.trading_symbols), self.symbol_max_orders, 3]
+
         for i, symbol in enumerate(self.trading_symbols):
             symbol_orders = self.simulator.symbol_orders(symbol)
             for j, order in enumerate(symbol_orders):
-                orders[i, j] = [order.entry_price, order.volume, order.profit]
+                index = i * orders_shape[0] * (orders_shape[2] + orders_shape[1]) + j * orders_shape[2]
+                orders[index:(index+3)] = [order.entry_price, order.volume, order.profit]
+
+        # 2 symbol, 4 max, 3 shape
+        #0 0 0, 0 0 0, 0 0 0, 0 0 0, 1 1 1, 1 1 1, 1 1 1, 1 1 
 
         observation = {
             'balance': np.array([self.simulator.balance]),
             'equity': np.array([self.simulator.equity]),
             'margin': np.array([self.simulator.margin]),
-            'is_dead': self._is_dead,
+            'is_dead': np.array([self._is_dead]),
             'features': features,
             'orders': orders,
         }

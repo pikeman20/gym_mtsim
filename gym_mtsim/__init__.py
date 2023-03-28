@@ -1,4 +1,7 @@
-from gym.envs.registration import register
+try:
+    from gymnasium.envs.registration import register
+except:
+    from gym.envs.registration import register
 
 from .metatrader import Timeframe, SymbolInfo
 from .simulator import BinanceSimulator, OrderType, Order, SymbolNotFound, OrderNotFound
@@ -126,7 +129,7 @@ register(
     kwargs={
         'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_PATH, hedge=True),
         'trading_symbols': ['BTCUSDT'],
-        'window_size': 50,
+        'window_size': 20,
         'symbol_max_orders': 2,
         'fee': lambda symbol: {
             'BTCUSDT': 0.0004,
@@ -140,7 +143,7 @@ register(
     kwargs={
         'original_simulator': BinanceSimulator(symbols_filename=BINANCE_DATA_PATH, hedge=False),
         'trading_symbols': ['BTCUSDT'],
-        'window_size': 50,
+        'window_size': 20,
         'fee': lambda symbol: {
             'BTCUSDT': 0.0004,
         }[symbol]
@@ -159,7 +162,7 @@ else:
         kwargs={
             'original_simulator': BinanceSimulatorGPU(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=True),
             'trading_symbols': ['BTCUSDT'],
-            'window_size': 50,
+            'window_size': 20,
             'symbol_max_orders': 2,
             'fee': lambda symbol: {
                 'BTCUSDT': 0.0004,
@@ -173,7 +176,7 @@ else:
         kwargs={
             'original_simulator': BinanceSimulatorGPU(symbols_filename=BINANCE_DATA_GPU_PATH, hedge=False),
             'trading_symbols': ['BTCUSDT'],
-            'window_size': 50,
+            'window_size': 20,
             'fee': lambda symbol: {
                 'BTCUSDT': 0.0004,
             }[symbol]

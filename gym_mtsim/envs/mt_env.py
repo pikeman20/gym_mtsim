@@ -72,7 +72,7 @@ class MtEnv(gym.Env):
         self.close_threshold = close_threshold
         self.fee = fee
         self.symbol_max_orders = symbol_max_orders
-        self._is_dead = 0.
+        self._is_dead = 0
         self.prices = self._get_prices()
         self.signal_features = self._process_data()
         self.features_shape = (window_size, self.signal_features.shape[1])
@@ -103,7 +103,7 @@ class MtEnv(gym.Env):
             'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-            'is_dead': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
+            'is_dead': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
             'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
                 low=-np.inf, high=np.inf, dtype=np.float32,
@@ -144,7 +144,7 @@ class MtEnv(gym.Env):
         except:
             print('Exception at reset write log')
         self._done = False
-        self._is_dead = 0.
+        self._is_dead = 0
         self._start_tick, self._end_tick = self.getEnvironmentRange()
         self._current_tick = self._start_tick
         self.simulator = copy.deepcopy(self.original_simulator)
@@ -178,9 +178,9 @@ class MtEnv(gym.Env):
             self._done = True
         truncated = False
         if(self.old_gym):
-            return observation, step_reward, self._done, info #truncated = False
+            return observation, step_reward, self._done, info 
         else:
-            return observation, step_reward, self._done, truncated, info
+            return observation, step_reward, self._done, truncated, info #truncated = False
 
     def _apply_action(self, action: np.ndarray) -> Tuple[Dict, Dict]:
         orders_info = {}
@@ -302,7 +302,7 @@ class MtEnv(gym.Env):
             'balance': np.array([self.simulator.balance]),
             'equity': np.array([self.simulator.equity]),
             'margin': np.array([self.simulator.margin]),
-            'is_dead': np.array([self._is_dead]),
+            'is_dead': np.array([self._is_dead], dtype=int),
             'features': features,
             'orders': orders,
         }
@@ -326,7 +326,7 @@ class MtEnv(gym.Env):
         # Check if the agent has run out of money
         if current_equity <= 0:
             step_reward = -100
-            self._is_dead = 1.
+            self._is_dead = 1
         else:
             # Bonus for opening a new order
             bonus_for_open_order = 0.

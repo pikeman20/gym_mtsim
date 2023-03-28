@@ -132,7 +132,7 @@ class MtEnv(gym.Env):
         
         return start_tick, end_tick
 
-    def reset(self, seed: int = None, options: dict[str, Any] = None) -> Dict[str, np.ndarray]:
+    def reset(self, seed: int = None, options = None) -> Dict[str, np.ndarray]:
         if(not self.old_gym):
             super().reset(seed=seed)
         try:

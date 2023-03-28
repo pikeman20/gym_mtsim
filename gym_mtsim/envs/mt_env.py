@@ -133,11 +133,11 @@ class MtEnv(gym.Env):
         end_tick = start_tick + self.env_size
         
         return start_tick, end_tick
-    def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)
-        return self.reset(), self.history[0]
 
-    def reset(self) -> Dict[str, np.ndarray]:
+    def reset(self, *, seed=None, options=None) -> Dict[str, np.ndarray]:
+        if not self.old_gym:
+            super().reset(seed=seed)
+
         try:
             if(self.save_img_in_reset and os.path.exists("img_log") and self.history != NotImplemented and len(self.history) > 0):
                 fig = self.render('advanced_figure', time_format="%Y-%m-%d", return_figure = True)
@@ -153,7 +153,7 @@ class MtEnv(gym.Env):
         self.simulator = copy.deepcopy(self.original_simulator)
         self.simulator.current_time = self.time_points[self._current_tick]
         self.history = [self._create_info(step_reward = 0, reward_description = "")]
-        return self._get_observation()
+        return self._get_observation(), self.history[0]
 
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
@@ -179,8 +179,8 @@ class MtEnv(gym.Env):
         if(self._is_dead):
             self._done = True
         truncated = False
-        
-        if 'gymnasium' in sys.modules:
+
+        if not self.old_gym:
             return observation, step_reward, self._done, truncated, info
         else:
             return observation, step_reward, self._done, info 

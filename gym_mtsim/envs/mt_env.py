@@ -83,7 +83,7 @@ class MtEnv(gym.Env):
         self.old_gym = old_gym
         # spaces
         self.action_space = spaces.Box(
-            low=-1e9, high=1e9, dtype=np.float64,
+            low=-1e6, high=1e6, dtype=np.float64,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
@@ -703,8 +703,13 @@ class MtEnv(gym.Env):
         return ratio
     
     def _normalize_action(self, action):
-        formatted_str = np.array2string(action, formatter={'float_kind':
-        lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '')})
-        formatted_str = formatted_str.replace('[', '').replace(']', '').replace('\n', '')
-        formatted_array = np.fromiter(formatted_str.split(), dtype=np.float64)
-        return formatted_array
+        x_min = self.action_space.low
+        x_max = self.action_space.high
+        return 2 * (action - x_min) / (x_max - x_min) - 1
+        # formatted_str = np.array2string(action, formatter={'float_kind':
+        # lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '').replace('nan', '0')})
+        # formatted_str = formatted_str.replace('[', '').replace(']', '').replace('\n', '')
+        # formatted_array = np.fromiter(formatted_str.split(), dtype=np.float64)
+        # return formatted_array
+
+    

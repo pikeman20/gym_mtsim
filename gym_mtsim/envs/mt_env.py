@@ -25,7 +25,7 @@ else:
 
 
 from ..simulator import BinanceSimulator, OrderType
-
+from .env_storage import EnvStorage
 class MtEnv(gym.Env):
 
     metadata = {'render.modes': ['human', 'simple_figure', 'advanced_figure']}
@@ -255,12 +255,16 @@ class MtEnv(gym.Env):
 
     def _get_prices(self, keys: List[str]=['Close', 'Open']) -> Dict[str, np.ndarray]:
         prices = {}
+        retObj = EnvStorage.get_prices(self.original_simulator.symbols_filename)
+        if(retObj is not None):
+            return retObj
+        else:
+            for symbol in self.trading_symbols:
+                p = self.original_simulator.prices_at(symbol, self.time_points)[keys]
+                prices[symbol] = np.array(p)
 
-        for symbol in self.trading_symbols:
-            p = self.original_simulator.prices_at(symbol, self.time_points)[keys]
-            prices[symbol] = np.array(p)
-
-        return prices
+            EnvStorage.set_prices(self.original_simulator.symbols_filename, prices)
+            return prices
 
     def _get_features(self) -> Dict[str, np.ndarray]:
         data = None
@@ -268,14 +272,19 @@ class MtEnv(gym.Env):
             data = self.prices
         else:
             features = {}
-            for symbol in self.trading_symbols:
-                keys = self.original_simulator.symbols_data_normalized[symbol].columns.tolist()
-                remove = ['Time', 'normalizesma']
-                keys = list(filter(lambda x: x not in remove, keys))
-                p = self.original_simulator.features_at(symbol, self.time_points)[keys]
-                features[symbol] = np.array(p)
+            retObj = EnvStorage.get_features(self.original_simulator.symbols_filename)
+            if(retObj is not None):
+                return retObj
+            else:
+                for symbol in self.trading_symbols:
+                    keys = self.original_simulator.symbols_data_normalized[symbol].columns.tolist()
+                    remove = ['Time', 'normalizesma']
+                    keys = list(filter(lambda x: x not in remove, keys))
+                    p = self.original_simulator.features_at(symbol, self.time_points)[keys]
+                    features[symbol] = np.array(p)
 
-            data = features
+                EnvStorage.set_features(self.original_simulator.symbols_filename, features)
+                data = features
         return data
     
     def _process_data(self) -> np.ndarray:

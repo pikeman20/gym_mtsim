@@ -39,6 +39,7 @@ class BinanceSimulator:
         self.closed_orders: List[Order] = []
         self.current_time: datetime = NotImplemented
         self.risk_ratio = risk_ratio
+        self.symbols_filename = symbols_filename
         try:
             if symbols_filename:
                 if not self.load_symbols(symbols_filename):

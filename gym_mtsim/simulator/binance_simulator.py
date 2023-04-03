@@ -13,7 +13,7 @@ from gym_mtsim.data import BINANCE_SYMBOL_PATH, BINANCE_SYMBOL_CSV_PATH
 from ..metatrader import Timeframe, SymbolInfo, _local2utc
 from .order import OrderType, Order
 from .exceptions import SymbolNotFound, OrderNotFound
-
+from .symbol_storage import SymbolStorage
 
 class BinanceSimulator:
 
@@ -108,12 +108,12 @@ class BinanceSimulator:
     def load_symbols(self, filename: str) -> bool:
         if not os.path.exists(filename):
             return False
-        with open(filename, 'rb') as file:
-            data = pickle.load(file)
-            self.symbols_info = data[0]
-            self.symbols_data = data[1]
-            if(len(data) > 2):
-                self.symbols_data_normalized = data[2]
+        data = SymbolStorage.get_data(filename)
+        self.symbols_info = data[0]
+        self.symbols_data = data[1]
+        if(len(data) > 2):
+            self.symbols_data_normalized = data[2]
+
         return True
 
 

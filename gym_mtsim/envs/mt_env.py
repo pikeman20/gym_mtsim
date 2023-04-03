@@ -705,6 +705,7 @@ class MtEnv(gym.Env):
     def _normalize_action(self, action):
         x_min = self.action_space.low
         x_max = self.action_space.high
+        action = np.nan_to_num(action, nan=0)
         return 2 * (action - x_min) / (x_max - x_min) - 1
         # formatted_str = np.array2string(action, formatter={'float_kind':
         # lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '').replace('nan', '0')})

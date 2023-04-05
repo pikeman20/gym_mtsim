@@ -83,33 +83,32 @@ class MtEnv(gym.Env):
         self.old_gym = old_gym
         # spaces
         self.action_space = spaces.Box(
-            low=-1e6, high=1e6, dtype=np.float64,
+            low=-1e6, high=1e6, dtype=np.float32,
             shape=(len(self.trading_symbols) * (self.symbol_max_orders + 2),)
         )  # symbol -> [close_order_i(logit), hold(logit), volume]
 
         # self.observation_space = spaces.Dict({
-        #     'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-        #     'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-        #     'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+        #     'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+        #     'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
         #     'is_dead': spaces.Discrete(2), # 0 = not dead, 1 = dead
-        #     'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float64),
+        #     'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
         #     'orders': spaces.Box(
-        #         low=-np.inf, high=np.inf, dtype=np.float64,
+        #         low=-np.inf, high=np.inf, dtype=np.float32,
         #         shape=(len(self.trading_symbols), self.symbol_max_orders, 3)
         #     ),  # symbol, order_i -> [entry_price, volume, profit]
         # })
         # Flatten the 'orders' component
-        flattened_orders_shape = (len(self.trading_symbols) * self.symbol_max_orders * 3,)
 
         self.observation_space = spaces.Dict({
-            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
-            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
+            'balance': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'equity': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            'margin': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
             'is_dead': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
-            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float64),
+            'features': spaces.Box(low=-np.inf, high=np.inf, shape=self.features_shape, dtype=np.float32),
             'orders': spaces.Box(
-                low=-np.inf, high=np.inf, dtype=np.float64,
-                shape=flattened_orders_shape
+                low=-np.inf, high=np.inf, dtype=np.float32,
+                shape=(len(self.trading_symbols) * self.symbol_max_orders * 3,)
             ),  # symbol, order_i -> [entry_price, volume, profit]
         })
         # episode
@@ -719,7 +718,7 @@ class MtEnv(gym.Env):
         # formatted_str = np.array2string(action, formatter={'float_kind':
         # lambda x: ('-' if x < 0 else '') + '0.' + (f'{x:.4f}' % x).replace('.', '').replace('-', '').replace('nan', '0')})
         # formatted_str = formatted_str.replace('[', '').replace(']', '').replace('\n', '')
-        # formatted_array = np.fromiter(formatted_str.split(), dtype=np.float64)
+        # formatted_array = np.fromiter(formatted_str.split(), dtype=np.float32)
         # return formatted_array
 
     

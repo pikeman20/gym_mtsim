@@ -330,9 +330,9 @@ class MtEnv(gym.Env):
         step_reward = 0
         reward_description = ''
 
-        bonus_open_order_deduct_ratio = -0.005
-        take_profit_reached_ratio = 0.3
-        stop_loss_reached_ratio = 0.3
+        bonus_open_order_deduct_ratio = -0.05
+        take_profit_reached_ratio = 10
+        stop_loss_reached_ratio = 8
         holding_order_weight = 0.1
         equity_change_weight = 3
         rate_of_return_weight = 2
@@ -344,12 +344,12 @@ class MtEnv(gym.Env):
             self._is_dead = 1
         else:
             # Bonus for opening a new order
-            # bonus_for_open_order = 0.
-            # if len(self.simulator.orders) == 0:
-            #     bonus_for_open_order = random.uniform(bonus_open_order_deduct_ratio, 0)
+            bonus_for_open_order = 0.
+            if len(self.simulator.orders) == 0:
+                bonus_for_open_order = random.uniform(bonus_open_order_deduct_ratio, 0)
 
-            # step_reward += bonus_for_open_order
-            # reward_description += f"Bonus (+): {bonus_for_open_order}<br> "
+            step_reward += bonus_for_open_order
+            reward_description += f"Bonus (+): {bonus_for_open_order}<br> "
             # Penalty for holding orders for too long
             penalty_for_holding_order = 0
             for order in self.simulator.orders:
